@@ -1,0 +1,6 @@
+flow:
+  - wait_for: { id: title }
+  - assert_text: { id: title, key: app_title }
+  - assert_visible: { id: support }
+  - assert_visible: { id: register }
+  - screenshot: push

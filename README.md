@@ -80,4 +80,3 @@ cargo doc --no-deps --open
 ```
 
 [MPL-2.0 license](LICENSE)
-# day-part-push

@@ -1,0 +1,16 @@
+app_title = Push Lab
+intro = Register this device with a push service, then send it a notification from your server. Sender credentials stay on the server.
+supported = A native push backend is enabled.
+unavailable = No push backend is enabled for this platform.
+ready = Ready
+register = Enable notifications
+unregister = Disable push registration
+registration_requested = Registration requested. The device token will appear when the service responds.
+unregistered = Push registration disabled. Remove the device registration from your server too.
+token_received = Device registered with { $provider }
+no_token = Waiting for a device token
+copy_token = Copy device token
+waiting_message = Waiting for a notification
+received_message = Received notification: { $payload }
+opened_message = Opened notification: { $payload }
+operation_error = Could not complete the operation: { $error }

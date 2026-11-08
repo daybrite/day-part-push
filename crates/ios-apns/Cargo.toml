@@ -1,0 +1,24 @@
+[package]
+name = "day-part-push-ios-apns"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MPL-2.0"
+repository = "https://github.com/daybrite/day-part-push"
+description = "ios-apns backend for Day push notifications"
+include = ["/src/**", "/platform/**", "/build.rs", "/Cargo.toml", "/README.md", "/LICENSE"]
+
+[package.metadata.day]
+compat = "0.*"
+
+[dependencies]
+day-bridge = "0.*"
+day-core = "0.*"
+day-part-local-notify = "0.*"
+serde_json = "1"
+
+[build-dependencies]
+day-build = "0.*"
+
+[package.metadata.day.ios]
+frameworks = ["UIKit", "UserNotifications"]

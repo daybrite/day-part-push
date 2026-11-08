@@ -1,0 +1,15 @@
+/target/
+/demo/target/
+/demo/build/
+/build/
+.cargo/config.toml
+/demo/.cargo/config.toml
+Cargo.lock
+.env
+*.p8
+*service-account*.json
+/relay/node_modules/
+/relay/.wrangler/
+/relay/.dev.vars
+/relay/.env*
+/relay/private/

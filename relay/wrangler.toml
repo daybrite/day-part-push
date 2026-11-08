@@ -1,0 +1,20 @@
+name = "daybrite-push"
+account_id = "2d93362f5a041f9660346ece97b49624"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = false
+
+[[routes]]
+pattern = "push.daybrite.cloud"
+custom_domain = true
+
+[vars]
+APNS_TEAM_ID = "25KG25YA3R"
+APNS_KEY_ID = "CABJZP2ZBL"
+APNS_TOPIC = "dev.daybrite.showcase"
+FCM_PROJECT_ID = "day-showcase"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "daybrite-push"
+database_id = "4f788c35-95f5-49b9-ae51-b6692a8e93e3"

@@ -1,0 +1,25 @@
+[package]
+name = "day-part-push-android-fcm"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MPL-2.0"
+repository = "https://github.com/daybrite/day-part-push"
+description = "android-fcm backend for Day push notifications"
+include = ["/src/**", "/platform/**", "/build.rs", "/Cargo.toml", "/README.md", "/LICENSE"]
+
+[package.metadata.day]
+compat = "0.*"
+
+[dependencies]
+day-bridge = "0.*"
+day-platform-android = "0.*"
+
+[build-dependencies]
+day-build = "0.*"
+
+[package.metadata.day.android]
+gradle-dependencies = ["com.google.firebase:firebase-messaging:26.0.1"]
+java = ["platform/android"]
+manifest-components = ["platform/android/components.xml"]
+permissions = ["android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS"]

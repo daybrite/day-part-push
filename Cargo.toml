@@ -1,0 +1,37 @@
+[package]
+name = "day-part-push"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MPL-2.0"
+repository = "https://github.com/daybrite/day-part-push"
+description = "Native push services for Day apps"
+include = ["/src/**", "/Cargo.toml", "/README.md", "/docs/**", "/LICENSE"]
+
+[package.metadata.day]
+compat = "0.*"
+
+[dependencies]
+day-bridge = "0.*"
+day-core = "0.*"
+day-part-permissions = "0.*"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+day-part-http = { version = "0.*", optional = true }
+url = { version = "2", optional = true }
+
+[features]
+relay = ["dep:day-part-http", "dep:url"]
+default = ["ios-apns", "android-fcm"]
+ios-apns = ["dep:day-part-push-ios-apns"]
+android-fcm = ["dep:day-part-push-android-fcm"]
+
+[target.'cfg(target_os = "ios")'.dependencies]
+day-part-push-ios-apns = { version = "0.*", path = "crates/ios-apns", optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+day-part-push-android-fcm = { version = "0.*", path = "crates/android-fcm", optional = true }
+
+[workspace]
+members = ["crates/ios-apns", "crates/android-fcm"]
+exclude = ["demo"]

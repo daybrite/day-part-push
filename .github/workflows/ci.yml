@@ -1,0 +1,106 @@
+name: ci
+on:
+  push:
+    branches: ["**"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      day-main:
+        description: Build against Day main
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  ci:
+    uses: daybrite/actions/.github/workflows/daylib.yml@v1
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    secrets: inherit
+    with:
+      day-main: ${{ inputs.day-main || false }}
+      scripts: dayscript/demo.yaml
+      publish: false
+      feature-sets: |
+        --workspace --all-features
+        --workspace --no-default-features
+  relay:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: relay/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test
+  android-providers:
+    uses: daybrite/actions/.github/workflows/dayapp.yml@v1
+    permissions:
+      contents: write
+    secrets: inherit
+    with:
+      project-path: demo
+      targets: android-material
+      artifact-prefix: providers-
+      release-assets: false
+      deploy-website: "false"
+      flavors: fcm, fdroid
+      scripts: dayscript/demo.yaml
+      day-deps: ${{ inputs.day-main && 'main' || 'auto' }}
+  android-dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - id: day
+        uses: daybrite/actions/.github/actions/day-deps@v1
+        with:
+          path: demo
+          day-deps: ${{ inputs.day-main && 'main' || 'auto' }}
+      - uses: daybrite/actions/.github/actions/setup-day-cli@v1
+        with:
+          version: ${{ steps.day.outputs.cli }}
+      - uses: daybrite/actions/.github/actions/setup-day-deps@v1
+        with:
+          target: android-material
+          pack: "false"
+          java: "true"
+      - name: Verify FCM and Google-free APK dependencies
+        run: python3 ci/check-providers.py
+  publish:
+    needs: [ci, relay, android-providers, android-dependencies]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check package versions match the release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PYTHON'
+          import os
+          import pathlib
+          import tomllib
+          version = os.environ["RELEASE_TAG"].removeprefix("v")
+          for manifest in ("Cargo.toml", "crates/android-fcm/Cargo.toml", "crates/ios-apns/Cargo.toml"):
+              package = tomllib.loads(pathlib.Path(manifest).read_text())["package"]
+              if package["version"] != version:
+                  raise SystemExit(f"{manifest}: package version does not match {version}")
+          PYTHON
+      - uses: daybrite/actions/.github/actions/publish-crates@v1
+        with:
+          path: "."
