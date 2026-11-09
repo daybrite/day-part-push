@@ -57,7 +57,15 @@ export function message(value) {
   if (encoder.encode(JSON.stringify(result)).length > 3000) throw new Problem(413, 'Message too large');
   return result;
 }
-export async function handle(request, env, dispatch = send) {
+// Seconds to hold a test send so the person can leave the app and see how the notification arrives
+// while it is in the background. The cap stays inside the time a Worker may keep running after its
+// response (`waitUntil`).
+export function delay(value) {
+  const seconds = value.delay ?? 0;
+  if (!Number.isInteger(seconds) || seconds < 0 || seconds > 20) throw new Problem(400, 'Delay must be 0 to 20 seconds');
+  return seconds;
+}
+export async function handle(request, env, dispatch = send, ctx = undefined) {
   try {
     const path = new URL(request.url).pathname;
     if (request.method === 'GET' && path === '/health') return json({ service: 'day-push', status: 'ok' });
@@ -100,12 +108,22 @@ export async function handle(request, env, dispatch = send) {
       return json({ updated: true });
     }
     if (request.method === 'POST' && match[2]) {
-      const payload = message(await body(request));
+      const value = await body(request), payload = message(value), seconds = delay(value);
       const ready = await env.DB.prepare('UPDATE devices SET last_sent = ? WHERE id = ? AND last_sent <= ? RETURNING id')
         .bind(now(), id, now() - 30).first();
       if (!ready) throw new Problem(429, 'Wait 30 seconds between test sends');
-      const result = await dispatch(env, device, payload);
-      if (result.invalidToken) await env.DB.prepare('DELETE FROM devices WHERE id = ?').bind(id).run();
+      const deliver = async () => {
+        const result = await dispatch(env, device, payload);
+        if (result.invalidToken) await env.DB.prepare('DELETE FROM devices WHERE id = ?').bind(id).run();
+        return result;
+      };
+      if (seconds > 0 && ctx) {
+        // The caller learns only that the send is scheduled; a provider rejection after the delay
+        // removes an invalid token as usual but has no response left to report it in.
+        ctx.waitUntil(new Promise(resolve => setTimeout(resolve, seconds * 1000)).then(deliver).catch(() => {}));
+        return json({ scheduled: true, delay: seconds }, 202);
+      }
+      const result = await deliver();
       return json(result, result.accepted ? 200 : 502);
     }
     throw new Problem(405, 'Method not allowed');
@@ -115,4 +133,4 @@ export async function handle(request, env, dispatch = send) {
     return json({ error: 'Relay operation failed' }, 502);
   }
 }
-export default { fetch(request, env) { return handle(request, env); } };
+export default { fetch(request, env, ctx) { return handle(request, env, send, ctx); } };

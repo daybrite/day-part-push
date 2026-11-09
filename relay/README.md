@@ -19,7 +19,7 @@ sequenceDiagram
     Relay-->>App: Provider acceptance or rejection
 ```
 
-A device credential can update, send to, or remove only that registration. Test sends are limited to one every 30 seconds per device. Enrollment codes and device credentials are stored as hashes. Device tokens are stored in D1 so the sender can use them. Remove a registration when it is no longer needed; APNs/FCM invalid-token responses also remove it.
+A device credential can update, send to, or remove only that registration. Test sends are limited to one every 30 seconds per device. A test send can ask the relay to wait up to 20 seconds first (`delay`, in seconds); the relay then answers `202` at once and sends from `waitUntil`, so a provider rejection after the delay is not reported to the app. Enrollment codes and device credentials are stored as hashes. Device tokens are stored in D1 so the sender can use them. Remove a registration when it is no longer needed; APNs/FCM invalid-token responses also remove it.
 
 ## Run locally
 
@@ -64,9 +64,9 @@ node manage.mjs enroll
 node manage.mjs enroll private/enrollment.json
 ```
 
-In Day-Showcase, open **Notifications → Remote notifications**, enable push, and enter the code. Choose the APNs sandbox for development builds. Tap **Register with relay**, then **Send a test notification**.
+In Day-Showcase, open **Push notifications**, enter the code, and tap **Send now** or **Send in 10 seconds**. The first send asks for notification permission, waits for the device token, and registers the device with the relay. Later sends need only the tap. Use the delayed send to leave the app or lock the device and see how the notification arrives in the background. Development builds use the APNs sandbox; the switch is under **Advanced**.
 
-The app updates its registration when the device token changes. **Remove from relay** deletes the server registration and local credential. It does not turn off the OS notification permission.
+The app updates its registration when the device token changes. **Advanced → Remove from relay** deletes the server registration and local credential. It does not turn off the OS notification permission.
 
 An administrator can also send or remove a known registration:
 
@@ -79,6 +79,6 @@ Set `DAY_PUSH_RELAY` to use another HTTPS origin, or `http://127.0.0.1:8787` for
 
 ## Limits
 
-This is a development relay, not an account notification service. Enrollment requires an administrator, credentials authorize one device, and there are no user accounts, topics, delivery receipts, scheduling, or automatic retention policy. Provider acceptance is reported separately from device delivery. Payloads are limited to 3 KB; arbitrary provider options are not accepted.
+This is a development relay, not an account notification service. Enrollment requires an administrator, credentials authorize one device, and there are no user accounts, topics, delivery receipts, scheduling beyond the 20-second test delay, or automatic retention policy. Provider acceptance is reported separately from device delivery. Payloads are limited to 3 KB; arbitrary provider options are not accepted.
 
 Tests cover enrollment reuse and expiry, device isolation, rate limits, token changes, removal, payload validation, signing, and both providers in the Workers runtime with synthetic keys and network responses. They send no real notifications.

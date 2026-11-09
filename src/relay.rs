@@ -3,6 +3,10 @@ use crate::{Error, Provider, Token};
 use day_part_http::{Client as Http, Redirects, Request};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::time::Duration;
+
+/// The longest [`Client::send_test_after`] delay the relay accepts.
+pub const MAX_DELAY_SECONDS: u64 = 20;
 
 #[derive(Clone)]
 pub struct Client {
@@ -108,12 +112,36 @@ impl Client {
         title: &str,
         body: &str,
     ) -> Result<(), Error> {
+        self.send_test_after(registration, title, body, Duration::ZERO)
+            .await
+    }
+    /// Like [`send_test`](Self::send_test), but the relay holds the notification for `delay`
+    /// (whole seconds, at most 20) so the app can be in the background when it arrives. With a
+    /// delay this returns once the relay has scheduled the send, and a later provider rejection
+    /// is not reported.
+    pub async fn send_test_after(
+        &self,
+        registration: &Registration,
+        title: &str,
+        body: &str,
+        delay: Duration,
+    ) -> Result<(), Error> {
         registration.validate()?;
+        let seconds = delay.as_secs();
+        if seconds > MAX_DELAY_SECONDS {
+            return Err(Error::Platform(format!(
+                "relay delay is at most {MAX_DELAY_SECONDS} seconds"
+            )));
+        }
+        let mut message = json!({"title":title,"body":body,"data":{"day.demo":"push"}});
+        if seconds > 0 {
+            message["delay"] = seconds.into();
+        }
         self.send(
             &format!("/v1/devices/{}/test", registration.id),
             Some(&registration.credential),
             "POST",
-            json!({"title":title,"body":body,"data":{"day.demo":"push"}}),
+            message,
         )
         .await?;
         Ok(())
@@ -149,17 +177,14 @@ impl Client {
         }
         let response = Http::builder()
             .redirects(Redirects::Never)
-            .timeout_total(std::time::Duration::from_secs(30))
+            .timeout_total(Duration::from_secs(30))
             .build()
             .fetch_limited_future(request, 16 * 1024)
             .await
             .map_err(|e| Error::Platform(e.to_string()))?;
         if !(200..300).contains(&response.status) {
             // Do not echo arbitrary response bodies, which may contain tokens or proxy diagnostics.
-            return Err(Error::Platform(format!(
-                "relay HTTP status {}",
-                response.status
-            )));
+            return Err(Error::RelayStatus(response.status));
         }
         serde_json::from_slice(&response.body).map_err(|e| Error::Platform(e.to_string()))
     }

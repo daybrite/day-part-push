@@ -1,8 +1,8 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import { handle, digest, registration, message } from '../src/worker.js';
+import { handle, digest, registration, message, delay } from '../src/worker.js';
 import { signJwt, apnsPayload, send } from '../src/providers.js';
 
 function database() {
@@ -52,6 +52,24 @@ test('a device can send only to its registration and sends are rate limited',asy
   assert.equal((await handle(request(`/v1/devices/${a.id}/test`,'POST',a.credential,payload),e,dispatch)).status,200);
   assert.equal((await handle(request(`/v1/devices/${a.id}/test`,'POST',a.credential,payload),e,dispatch)).status,429);
   assert.equal(calls,1);
+});
+test('a delayed test send answers at once and reaches the provider after the delay',async()=>{
+  const e=env(), a=await enroll(e), pending=[]; let calls=0;
+  const dispatch=async ()=>{calls++;return {accepted:true,provider:'apns',status:200};};
+  const ctx={waitUntil(promise){pending.push(promise);}};
+  mock.timers.enable({apis:['setTimeout']});
+  try {
+    const response=await handle(request(`/v1/devices/${a.id}/test`,'POST',a.credential,
+      {title:'Fixture',body:'Later',delay:10}),e,dispatch,ctx);
+    assert.equal(response.status,202);
+    assert.deepEqual(await response.json(),{scheduled:true,delay:10});
+    assert.equal(pending.length,1);
+    mock.timers.tick(9999); await Promise.resolve(); assert.equal(calls,0);
+    mock.timers.tick(1); await Promise.all(pending); assert.equal(calls,1);
+  } finally { mock.timers.reset(); }
+  assert.throws(()=>delay({delay:21}));
+  assert.throws(()=>delay({delay:1.5}));
+  assert.equal(delay({}),0);
 });
 test('token rotation and removal require the device credential',async()=>{
   const e=env(), a=await enroll(e), path=`/v1/devices/${a.id}`;
