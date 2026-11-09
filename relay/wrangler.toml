@@ -18,3 +18,7 @@ FCM_PROJECT_ID = "day-showcase"
 binding = "DB"
 database_name = "daybrite-push"
 database_id = "4f788c35-95f5-49b9-ae51-b6692a8e93e3"
+
+# Hourly: delete registrations unused for a week and finished rate-limit periods.
+[triggers]
+crons = ["23 * * * *"]

@@ -84,7 +84,7 @@ day launch -t android-material --flavor fcm
 day build -t android-material --flavor fdroid
 ```
 
-Day-Showcase's Push notifications page also demonstrates enrollment and sending through the [Cloudflare relay](../relay/README.md). Sender credentials stay in Worker secrets; the app stores only a per-device credential in the keychain.
+Day-Showcase's Push notifications page also demonstrates registration and sending through the [Cloudflare relay](../relay/README.md). Any installation can register; device sends carry the relay's fixed sample text. Sender credentials stay in Worker secrets; the app stores only a per-device credential in the keychain.
 
 ## Check
 

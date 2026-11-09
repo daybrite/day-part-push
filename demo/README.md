@@ -22,4 +22,4 @@ From the package root, run `python3 ci/check-providers.py` to build FCM and then
 flavor and inspect both APKs. Set `DAY_BIN` to select a specific Day CLI.
 
 UI strings are localized in `resource/locales/`. Keep sender credentials on the server; see the
-[Cloudflare relay](../relay/README.md) for the Day-Showcase enrollment and sending example.
+[Cloudflare relay](../relay/README.md) for the Day-Showcase registration and sending example.

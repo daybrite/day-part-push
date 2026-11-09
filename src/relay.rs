@@ -74,9 +74,12 @@ impl Client {
             base: url.as_str().trim_end_matches('/').into(),
         })
     }
+    /// Registers this device's token with the relay and returns the credential that sends to it.
+    /// Any device may register; the relay limits registrations per network and hour
+    /// ([`Error::RelayStatus`] 429) and in total (503). A registration unused for a week expires,
+    /// after which its calls answer 404: register again.
     pub async fn enroll(
         &self,
-        code: &str,
         token: &Token,
         environment: Environment,
     ) -> Result<Registration, Error> {
@@ -85,7 +88,7 @@ impl Client {
                 "/v1/devices",
                 None,
                 "POST",
-                json!({"code":code,"provider":token.provider,
+                json!({"provider":token.provider,
             "token":token.value,"environment":environment_for(token,environment)}),
             )
             .await?;
@@ -105,14 +108,12 @@ impl Client {
             json!({"provider":token.provider,"token":token.value,"environment":environment_for(token,environment)})).await?;
         Ok(())
     }
-    /// Returns once APNs or FCM accepts the notification. Acceptance does not prove device delivery.
-    pub async fn send_test(
-        &self,
-        registration: &Registration,
-        title: &str,
-        body: &str,
-    ) -> Result<(), Error> {
-        self.send_test_after(registration, title, body, Duration::ZERO)
+    /// Sends the relay's sample notification, in the language of `locale` (a BCP 47 tag such as
+    /// `fr` or `zh-CN`) when the relay has it and in English otherwise. Only the relay's
+    /// administrator chooses notification text. Returns once APNs or FCM accepts the
+    /// notification; acceptance does not prove device delivery.
+    pub async fn send_test(&self, registration: &Registration, locale: &str) -> Result<(), Error> {
+        self.send_test_after(registration, locale, Duration::ZERO)
             .await
     }
     /// Like [`send_test`](Self::send_test), but the relay holds the notification for `delay`
@@ -122,8 +123,7 @@ impl Client {
     pub async fn send_test_after(
         &self,
         registration: &Registration,
-        title: &str,
-        body: &str,
+        locale: &str,
         delay: Duration,
     ) -> Result<(), Error> {
         registration.validate()?;
@@ -133,7 +133,7 @@ impl Client {
                 "relay delay is at most {MAX_DELAY_SECONDS} seconds"
             )));
         }
-        let mut message = json!({"title":title,"body":body,"data":{"day.demo":"push"}});
+        let mut message = json!({"locale":locale});
         if seconds > 0 {
             message["delay"] = seconds.into();
         }

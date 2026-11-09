@@ -40,13 +40,6 @@ try {
     await writeFile(new URL('.dev.vars', import.meta.url), Object.entries(local).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join('\n') + '\n', { mode: 0o600 });
     await run('d1', 'execute', 'daybrite-push', '--local', '--file=schema.sql');
     await run('dev', '--ip', '127.0.0.1');
-  } else if (command === 'enroll') {
-    const admin = process.env.DAY_PUSH_ADMIN_TOKEN ?? (await secrets()).ADMIN_TOKEN;
-    const enrollment = await request('/v1/enrollments', 'POST', undefined, admin);
-    if (args[0]) {
-      await writeFile(args[0], JSON.stringify(enrollment) + '\n', { mode: 0o600, flag: 'wx' });
-      console.log('Enrollment code saved; expires in ten minutes.');
-    } else console.log(JSON.stringify(enrollment, null, 2));
   } else if (command === 'send' || command === 'remove') {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(args[0] ?? '')) throw new Error('Supply a registration UUID');
     const admin = process.env.DAY_PUSH_ADMIN_TOKEN ?? (await secrets()).ADMIN_TOKEN;
@@ -55,7 +48,7 @@ try {
       if (args.length !== 3) throw new Error('Usage: node manage.mjs send UUID "title" "body"');
       console.log(await request(`/v1/devices/${args[0]}/test`, 'POST', { title: args[1], body: args[2] }, admin));
     }
-  } else throw new Error('Usage: node manage.mjs health | dev | enroll [new-file.json] | send UUID "title" "body" | remove UUID');
+  } else throw new Error('Usage: node manage.mjs health | dev | send UUID "title" "body" | remove UUID');
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

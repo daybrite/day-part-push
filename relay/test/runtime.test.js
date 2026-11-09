@@ -18,7 +18,7 @@ test('Worker runtime signs and sends APNs and FCM requests without following red
   let redirect = false;
   const admin = 'a'.repeat(43);
   const mf = new Miniflare(convertV4MiniflareOptions({
-    modules: ['worker.js', 'providers.js'].map(name => ({
+    modules: ['worker.js', 'policy.js', 'providers.js'].map(name => ({
       type: 'ESModule', path: fileURLToPath(new URL(`../src/${name}`, import.meta.url)),
     })),
     compatibilityDate: '2026-11-01',
@@ -40,7 +40,7 @@ test('Worker runtime signs and sends APNs and FCM requests without following red
       assert.match(request.headers.get('authorization'), /bearer /i);
       const payload = await request.json();
       if (url.hostname === 'fcm.googleapis.com') assert.equal(payload.message.android.restricted_package_name, 'dev.example.fixture');
-      else assert.equal(payload.aps.alert.title, 'Fixture');
+      else assert.equal(payload.aps.alert.title, 'Hello from Day');
       if (redirect) return new Response(null, { status: 307, headers: { location: 'https://unexpected.example.test/' } });
       return Response.json({});
     },
@@ -55,15 +55,18 @@ test('Worker runtime signs and sends APNs and FCM requests without following red
     for (const provider of ['apns', 'fcm']) {
       for (const shouldRedirect of [false, true]) {
         redirect = shouldRedirect;
-        const enrollment = await (await dispatch('/v1/enrollments', {})).json();
         const registration = await (await dispatch('/v1/devices', {
-          code: enrollment.code, provider, token: 'a'.repeat(64), environment: provider === 'apns' ? 'sandbox' : 'production',
-        })).json();
-        const result = await dispatch(`/v1/devices/${registration.id}/test`, { title: 'Fixture', body: 'Synthetic message' }, registration.credential);
+          provider, token: 'a'.repeat(64), environment: provider === 'apns' ? 'sandbox' : 'production',
+        }, '')).json();
+        const result = await dispatch(`/v1/devices/${registration.id}/test`, { locale: 'en' }, registration.credential);
         assert.equal(result.status, shouldRedirect ? 502 : 200);
         assert.equal((await result.json()).accepted, !shouldRedirect);
       }
     }
     assert.deepEqual(calls, ['api.sandbox.push.apple.com', 'api.sandbox.push.apple.com', 'oauth2.googleapis.com', 'fcm.googleapis.com', 'fcm.googleapis.com']);
+    // The cron trigger's cleanup runs against D1 in the Workers runtime; recent registrations stay.
+    const before = await db.prepare('SELECT COUNT(*) AS count FROM devices').first();
+    assert.equal((await (await mf.getWorker()).scheduled({ cron: '23 * * * *' })).outcome, 'ok');
+    assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM devices').first()).count, before.count);
   } finally { await mf.dispose(); }
 });
