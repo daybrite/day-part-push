@@ -9,14 +9,24 @@ pub fn unregister() -> day_bridge::Completion<String> {
 use std::sync::{Arc, Mutex};
 type Callback = Arc<dyn Fn(String) + Send + Sync>;
 static CALLBACK: Mutex<Option<Callback>> = Mutex::new(None);
+/// Route native push events to `callback`.
+///
+/// # Errors
+///
+/// Never fails; the `Result` matches the other transports' `start`.
 pub fn start(callback: impl Fn(String) + Send + Sync + 'static) -> Result<(), day_bridge::Error> {
-    *CALLBACK.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(callback));
+    *CALLBACK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::new(callback));
     day_part_local_notify::prepare_delivery();
     Ok(())
 }
 #[cfg(target_os = "ios")]
-fn deliver(value: serde_json::Value) {
-    let callback = CALLBACK.lock().unwrap_or_else(|e| e.into_inner()).clone();
+fn deliver(value: &serde_json::Value) {
+    let callback = CALLBACK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
     if let Some(callback) = callback {
         callback(value.to_string());
     }
@@ -27,16 +37,24 @@ fn deliver(value: serde_json::Value) {
 static NOTIFICATIONS: fn(&day_core::services::NotificationEvent) = |event| {
     use day_core::services::NotificationEvent as Native;
     use serde_json::json;
+    use std::fmt::Write as _;
     match event {
-        Native::Registered(bytes) => deliver(json!({"event":"token", "token":{"provider":"apns",
-            "value":bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()}})),
-        Native::RegistrationFailed(message) => deliver(json!({"event":"error", "message":message})),
+        Native::Registered(bytes) => {
+            let value = bytes.iter().fold(String::new(), |mut hex, b| {
+                let _ = write!(hex, "{b:02x}");
+                hex
+            });
+            deliver(&json!({"event":"token", "token":{"provider":"apns", "value":value}}));
+        }
+        Native::RegistrationFailed(message) => {
+            deliver(&json!({"event":"error", "message":message}));
+        }
         Native::Received { payload, opened } => {
             match serde_json::from_str::<serde_json::Value>(payload) {
                 Ok(payload) => {
-                    deliver(json!({"event":"message", "payload":payload, "opened":opened}))
+                    deliver(&json!({"event":"message", "payload":payload, "opened":opened}));
                 }
-                Err(error) => deliver(json!({"event":"error", "message":error.to_string()})),
+                Err(error) => deliver(&json!({"event":"error", "message":error.to_string()})),
             }
         }
     }

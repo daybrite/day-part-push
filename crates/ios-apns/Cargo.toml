@@ -11,6 +11,9 @@ include = ["/src/**", "/platform/**", "/build.rs", "/Cargo.toml", "/README.md", 
 [package.metadata.day]
 compat = "0.*"
 
+[lints]
+workspace = true
+
 [dependencies]
 day-bridge = "0.*"
 day-core = "0.*"

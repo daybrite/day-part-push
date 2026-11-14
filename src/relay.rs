@@ -50,6 +50,10 @@ pub enum Environment {
 }
 impl Client {
     /// HTTPS for remote servers; HTTP is accepted only for numeric loopback addresses or localhost.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Platform`] when `base` is not an HTTPS origin or a loopback HTTP origin.
     pub fn new(base: &str) -> Result<Self, Error> {
         let url = url::Url::parse(base).map_err(|e| Error::Platform(e.to_string()))?;
         let loopback = match url.host() {
@@ -78,6 +82,11 @@ impl Client {
     /// Any device may register; the relay limits registrations per network and hour
     /// ([`Error::RelayStatus`] 429) and in total (503). A registration unused for a week expires,
     /// after which its calls answer 404: register again.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::RelayStatus`] with the relay's HTTP status, and [`Error::Platform`]
+    /// when the request fails or the answer is not a valid registration.
     pub async fn enroll(
         &self,
         token: &Token,
@@ -97,6 +106,12 @@ impl Client {
         registration.validate()?;
         Ok(registration)
     }
+    /// Replaces the token and environment the relay holds for `registration`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Platform`] for an invalid registration or a failed request, and
+    /// [`Error::RelayStatus`] with the relay's HTTP status.
     pub async fn update(
         &self,
         registration: &Registration,
@@ -112,6 +127,10 @@ impl Client {
     /// `fr` or `zh-CN`) when the relay has it and in English otherwise. Only the relay's
     /// administrator chooses notification text. Returns once APNs or FCM accepts the
     /// notification; acceptance does not prove device delivery.
+    ///
+    /// # Errors
+    ///
+    /// Fails as [`send_test_after`](Self::send_test_after) does.
     pub async fn send_test(&self, registration: &Registration, locale: &str) -> Result<(), Error> {
         self.send_test_after(registration, locale, Duration::ZERO)
             .await
@@ -120,6 +139,11 @@ impl Client {
     /// (whole seconds, at most 20) so the app can be in the background when it arrives. With a
     /// delay this returns once the relay has scheduled the send, and a later provider rejection
     /// is not reported.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Platform`] for an invalid registration, a delay over 20 seconds or a
+    /// failed request, and [`Error::RelayStatus`] with the relay's HTTP status.
     pub async fn send_test_after(
         &self,
         registration: &Registration,
@@ -146,6 +170,12 @@ impl Client {
         .await?;
         Ok(())
     }
+    /// Deletes `registration` from the relay.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Platform`] for an invalid registration or a failed request, and
+    /// [`Error::RelayStatus`] with the relay's HTTP status.
     pub async fn remove(&self, registration: &Registration) -> Result<(), Error> {
         registration.validate()?;
         self.send(

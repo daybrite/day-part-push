@@ -92,13 +92,16 @@ impl Subscriber {
     fn enqueue(&self, event: Event) {
         self.state
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .pending
             .push_back(event);
     }
     fn drain(&self) {
         {
-            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut state = self
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if state.running {
                 return;
             }
@@ -106,20 +109,24 @@ impl Subscriber {
         }
         loop {
             let event = {
-                let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-                match state.pending.pop_front() {
-                    Some(event) => event,
-                    None => {
-                        state.running = false;
-                        return;
-                    }
-                }
+                let mut state = self
+                    .state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some(event) = state.pending.pop_front() else {
+                    state.running = false;
+                    return;
+                };
+                event
             };
             // Callbacks can subscribe, unsubscribe, or trigger another event without holding a hub lock.
             if let Err(panic) =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (self.callback)(event)))
             {
-                self.state.lock().unwrap_or_else(|e| e.into_inner()).running = false;
+                self.state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .running = false;
                 std::panic::resume_unwind(panic);
             }
         }
@@ -136,10 +143,12 @@ static HUB: OnceLock<Mutex<Hub>> = OnceLock::new();
 fn hub() -> &'static Mutex<Hub> {
     HUB.get_or_init(Mutex::default)
 }
-fn deliver(event: Event) {
+fn deliver(event: &Event) {
     let listeners = {
-        let mut hub = hub().lock().unwrap_or_else(|e| e.into_inner());
-        if let Event::Token { token } = &event {
+        let mut hub = hub()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Event::Token { token } = event {
             hub.token = Some(token.clone());
         } else {
             if hub.recent.len() == 32 {
@@ -163,7 +172,7 @@ impl Drop for Watch {
     fn drop(&mut self) {
         hub()
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .listeners
             .remove(&self.0);
     }
@@ -171,6 +180,11 @@ impl Drop for Watch {
 
 /// Subscribe to token changes and messages. Replays the last token and up to 32 recent events,
 /// including notification taps received before the UI mounted. Callbacks may run off the UI thread.
+///
+/// # Errors
+///
+/// Returns [`Error::Unsupported`] where no push transport is built in, and
+/// [`Error::Platform`] when the transport cannot start.
 pub fn watch(callback: impl Fn(Event) + Send + Sync + 'static) -> Result<Watch, Error> {
     start()?;
     let listener = Arc::new(Subscriber {
@@ -178,7 +192,9 @@ pub fn watch(callback: impl Fn(Event) + Send + Sync + 'static) -> Result<Watch, 
         state: Mutex::default(),
     });
     let id = {
-        let mut hub = hub().lock().unwrap_or_else(|e| e.into_inner());
+        let mut hub = hub()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         hub.next += 1;
         let id = hub.next;
         let mut replay = Vec::new();
@@ -206,11 +222,16 @@ pub fn supported() -> bool {
 }
 
 /// Ask for visible notification permission separately from transport registration.
+///
+/// # Errors
+///
+/// Returns [`Error::Unsupported`] where no push transport is built in or the platform has no
+/// notification permission, and [`Error::PermissionDenied`] when the person declines.
 pub async fn request_permission() -> Result<(), Error> {
+    use day_part_permissions::{Permission, Status};
     if !supported() {
         return Err(Error::Unsupported);
     }
-    use day_part_permissions::{Permission, Status};
     match day_part_permissions::request_future(Permission::Notifications).await {
         Status::Granted => Ok(()),
         Status::Unsupported => Err(Error::Unsupported),
@@ -220,26 +241,40 @@ pub async fn request_permission() -> Result<(), Error> {
 
 /// Start native token registration. Completion means the request was accepted; `Event::Token`
 /// carries the token. Apple requires a push entitlement; Android requires Firebase app resources.
+///
+/// # Errors
+///
+/// Returns [`Error::Unsupported`] where no push transport is built in, and
+/// [`Error::Platform`] when the transport rejects the request.
 pub async fn register() -> Result<(), Error> {
     start()?;
     answer(backend::register().await.map_err(bridge_error)?)
 }
+/// Withdraw the native registration and forget the cached token.
+///
+/// # Errors
+///
+/// Returns [`Error::Unsupported`] where no push transport is built in, and
+/// [`Error::Platform`] when the transport rejects the request.
 pub async fn unregister() -> Result<(), Error> {
     start()?;
     answer(backend::unregister().await.map_err(bridge_error)?)?;
-    hub().lock().unwrap_or_else(|e| e.into_inner()).token = None;
+    hub()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .token = None;
     Ok(())
 }
 fn start() -> Result<(), Error> {
+    static STARTED: OnceLock<Result<(), Error>> = OnceLock::new();
     if !supported() {
         return Err(Error::Unsupported);
     }
-    static STARTED: OnceLock<Result<(), Error>> = OnceLock::new();
     STARTED
         .get_or_init(|| {
             backend::start(|value| match serde_json::from_str(&value) {
-                Ok(event) => deliver(event),
-                Err(error) => deliver(Event::Error {
+                Ok(event) => deliver(&event),
+                Err(error) => deliver(&Event::Error {
                     message: error.to_string(),
                 }),
             })
@@ -254,6 +289,10 @@ fn answer(value: String) -> Result<(), Error> {
         Err(Error::Platform(value))
     }
 }
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "passed to `map_err`, which hands the error over by value"
+)]
 fn bridge_error(error: day_bridge::Error) -> Error {
     if matches!(error, day_bridge::Error::Unsupported) {
         Error::Unsupported
@@ -272,7 +311,7 @@ static SERVICE: day_core::services::Service = day_core::services::Service {
     name: "push",
     initialize: || {
         if let Err(error) = start() {
-            deliver(Event::Error {
+            deliver(&Event::Error {
                 message: error.to_string(),
             });
         }
