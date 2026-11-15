@@ -369,12 +369,12 @@ mod tests {
         let event: Event =
             serde_json::from_str(r#"{"event":"message","opened":true,"payload":{"id":"fixture"}}"#)
                 .unwrap();
-        assert!(matches!(event, Event::Message { opened: true, .. }));
+        std::assert_matches!(event, Event::Message { opened: true, .. });
         let event: Event = serde_json::from_str(
             r#"{"event":"token","token":{"provider":"apns","value":"fixture"}}"#,
         )
         .unwrap();
-        assert!(matches!(
+        std::assert_matches!(
             event,
             Event::Token {
                 token: Token {
@@ -382,7 +382,7 @@ mod tests {
                     ..
                 }
             }
-        ));
+        );
     }
 }
 
