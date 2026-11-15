@@ -32,10 +32,10 @@ fn deliver(value: &serde_json::Value) {
     }
 }
 #[cfg(target_os = "ios")]
-#[day_core::linkme::distributed_slice(day_core::services::NOTIFICATION_HANDLERS)]
-#[linkme(crate = day_core::linkme)]
-static NOTIFICATIONS: fn(&day_core::services::NotificationEvent) = |event| {
-    use day_core::services::NotificationEvent as Native;
+#[day_process::linkme::distributed_slice(day_process::services::NOTIFICATION_HANDLERS)]
+#[linkme(crate = day_process::linkme)]
+static NOTIFICATIONS: fn(&day_process::services::NotificationEvent) = |event| {
+    use day_process::services::NotificationEvent as Native;
     use serde_json::json;
     use std::fmt::Write as _;
     match event {

@@ -16,7 +16,7 @@ workspace = true
 
 [dependencies]
 day-bridge = "0.*"
-day-core = "0.*"
+day-process = "0.*"
 day-part-permissions = "0.*"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

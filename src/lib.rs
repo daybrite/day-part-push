@@ -305,9 +305,9 @@ fn bridge_error(error: day_bridge::Error) -> Error {
     all(target_os = "ios", feature = "ios-apns"),
     all(target_os = "android", feature = "android-fcm")
 ))]
-#[day_core::linkme::distributed_slice(day_core::services::SERVICES)]
-#[linkme(crate = day_core::linkme)]
-static SERVICE: day_core::services::Service = day_core::services::Service {
+#[day_process::linkme::distributed_slice(day_process::services::SERVICES)]
+#[linkme(crate = day_process::linkme)]
+static SERVICE: day_process::services::Service = day_process::services::Service {
     name: "push",
     initialize: || {
         if let Err(error) = start() {

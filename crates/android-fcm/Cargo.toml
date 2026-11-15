@@ -16,6 +16,8 @@ workspace = true
 
 [dependencies]
 day-bridge = "0.*"
+
+[target.'cfg(target_os = "android")'.dependencies]
 day-platform-android = "0.*"
 
 [build-dependencies]
